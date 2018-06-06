@@ -1,0 +1,1 @@
+/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++    -std=c++11 -O3 -DNDEBUG -Wl,-search_paths_first -Wl,-headerpad_max_install_names  CMakeFiles/usbcomm.dir/source/main.cpp.o CMakeFiles/usbcomm.dir/source/usbdev.cpp.o  -o usbcomm  -lftd2xx 

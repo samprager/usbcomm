@@ -1,0 +1,7 @@
+/Users/sam/Employment/JPL/usbcomm/build/CMakeFiles/install/local.dir
+/Users/sam/Employment/JPL/usbcomm/build/CMakeFiles/install/strip.dir
+/Users/sam/Employment/JPL/usbcomm/build/CMakeFiles/install.dir
+/Users/sam/Employment/JPL/usbcomm/build/CMakeFiles/list_install_components.dir
+/Users/sam/Employment/JPL/usbcomm/build/CMakeFiles/usbcomm.dir
+/Users/sam/Employment/JPL/usbcomm/build/CMakeFiles/rebuild_cache.dir
+/Users/sam/Employment/JPL/usbcomm/build/CMakeFiles/edit_cache.dir
