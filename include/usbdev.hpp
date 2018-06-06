@@ -15,10 +15,17 @@
 #include <sstream>
 #include <functional>
 #include <memory>
+#include <queue>
 
 #include "ftd2xx.h"
 // #include "mach/mach.h"
 // #include "WinTypes.h"
+
+struct rx_buf{
+  std::queue<std::string> data;
+  std::mutex mtx;
+};
+
 
 class usbdev
 {
@@ -58,6 +65,7 @@ private:
     bool _listening = false;
     bool _dev_ready = false;
     bool _start_listening = false;
+    std::shared_ptr<struct rx_buf> _rxbuf;
 };
 
 
