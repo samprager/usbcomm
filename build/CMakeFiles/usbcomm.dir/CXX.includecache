@@ -1,4 +1,4 @@
-#IncludeRegexLine: ^[ 	]*#[ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
 
 #IncludeRegexScan: ^.*$
 
@@ -38,7 +38,7 @@ memory
 ftd2xx.h
 .././include/ftd2xx.h
 
-/Users/sam/Employment/JPL/usbcomm/source/main.cpp
+/Users/prager/JPL/usbcomm/source/main.cpp
 stdio.h
 -
 unistd.h
@@ -52,9 +52,9 @@ iostream
 vector
 -
 usbdev.hpp
-/Users/sam/Employment/JPL/usbcomm/source/usbdev.hpp
+/Users/prager/JPL/usbcomm/source/usbdev.hpp
 
-/Users/sam/Employment/JPL/usbcomm/source/usbdev.cpp
+/Users/prager/JPL/usbcomm/source/usbdev.cpp
 usbdev.hpp
-/Users/sam/Employment/JPL/usbcomm/source/usbdev.hpp
+/Users/prager/JPL/usbcomm/source/usbdev.hpp
 

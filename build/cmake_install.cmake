@@ -1,4 +1,4 @@
-# Install script for directory: /Users/sam/Employment/JPL/usbcomm
+# Install script for directory: /Users/prager/JPL/usbcomm
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -27,7 +27,12 @@ if(NOT CMAKE_INSTALL_COMPONENT)
   endif()
 endif()
 
-if("${CMAKE_INSTALL_COMPONENT}" STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
+# Is this installation the result of a crosscompile?
+if(NOT DEFINED CMAKE_CROSSCOMPILING)
+  set(CMAKE_CROSSCOMPILING "FALSE")
+endif()
+
+if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
   list(APPEND CMAKE_ABSOLUTE_DESTINATION_FILES
    "/usr/local/bin/usbcomm")
   if(CMAKE_WARN_ON_ABSOLUTE_INSTALL_DESTINATION)
@@ -36,7 +41,7 @@ if("${CMAKE_INSTALL_COMPONENT}" STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMP
   if(CMAKE_ERROR_ON_ABSOLUTE_INSTALL_DESTINATION)
     message(FATAL_ERROR "ABSOLUTE path INSTALL DESTINATION forbidden (by caller): ${CMAKE_ABSOLUTE_DESTINATION_FILES}")
   endif()
-file(INSTALL DESTINATION "/usr/local/bin" TYPE EXECUTABLE FILES "/Users/sam/Employment/JPL/usbcomm/build/usbcomm")
+file(INSTALL DESTINATION "/usr/local/bin" TYPE EXECUTABLE FILES "/Users/prager/JPL/usbcomm/build/usbcomm")
   if(EXISTS "$ENV{DESTDIR}/usr/local/bin/usbcomm" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}/usr/local/bin/usbcomm")
     if(CMAKE_INSTALL_DO_STRIP)
@@ -53,5 +58,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "/Users/sam/Employment/JPL/usbcomm/build/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "/Users/prager/JPL/usbcomm/build/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")

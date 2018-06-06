@@ -159,6 +159,7 @@ int usbdev::read(std::string &msg, uint32_t nbytes, uint32_t max_checks){
     // Keep checking queue until D2XX has received all the bytes we wrote
  //		printf("D2XX receive-queue has ");
     bytesReceived = 0;
+    uint32_t prev_brx = 0;
     for (queueChecks = 0; queueChecks < max_checks; queueChecks++)
     {
         if (queueChecks % 128 == 0)
@@ -177,6 +178,14 @@ int usbdev::read(std::string &msg, uint32_t nbytes, uint32_t max_checks){
 
         if (bytesReceived >= nbytes)
             break;
+
+        // if ((bytesReceived >= nbytes) && (nbytes>0))
+        //     break;
+        //
+        // if ((nbytes==0) && (bytesReceived>0) && (prev_brx == bytesReceived))
+        //   break;
+
+        prev_brx = bytesReceived;
     }
     printf("\nDev has %d bytes in queue\n", (int)bytesReceived);
 
@@ -301,7 +310,7 @@ int usbdev::write(const std::string &msg, bool wait_resp)
         _stop_listening = false;
         _listen_mtx.unlock();
 
-        listen(std::bind(&usbdev::resp_callback, this,std::placeholders::_1),_default_response.length(),1000);
+        listen(std::bind(&usbdev::resp_callback, this,std::placeholders::_1),_default_response.length(),100);
 
         // listen(resp_callback, _default_response.length(),1,1000);
         // restart listener thread if it was already running
@@ -334,6 +343,7 @@ int usbdev::listen(std::function<int(uint32_t)> callback, uint32_t nbytes, doubl
 
     double timewait = 0.0;
 
+    uint32_t prev_brx = 0;
     while(!stop_listen)
     {
         if (queueChecks % 128 == 0)
@@ -350,8 +360,13 @@ int usbdev::listen(std::function<int(uint32_t)> callback, uint32_t nbytes, doubl
             break;
         }
 
-        if (bytesReceived >= nbytes)
+        if ((bytesReceived >= nbytes) && (nbytes>0))
             break;
+
+        if ((nbytes==0) && (bytesReceived>0) && (prev_brx == bytesReceived))
+          break;
+
+        prev_brx = bytesReceived;
 
         if ((timeout >= 0.0) && (timewait>= timeout)){
             ftStatus = -1;
@@ -455,7 +470,7 @@ void usbdev::start_listening_thread(){
             _rthread->join();
         }
     }
-    _rthread.reset(new std::thread(&usbdev::listen, this, std::bind(&usbdev::listener_callback,this,std::placeholders::_1), 1,-1.0));
+    _rthread.reset(new std::thread(&usbdev::listen, this, std::bind(&usbdev::listener_callback,this,std::placeholders::_1), 0,-1.0));
     std::cout<<"[start_listening_thread] Adding listener thread"<<std::endl;
     // _rthread->detach();
 }

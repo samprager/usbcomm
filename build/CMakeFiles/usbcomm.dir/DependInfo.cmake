@@ -4,8 +4,8 @@ set(CMAKE_DEPENDS_LANGUAGES
   )
 # The set of files for implicit dependencies of each language:
 set(CMAKE_DEPENDS_CHECK_CXX
-  "/Users/sam/Employment/JPL/usbcomm/source/main.cpp" "/Users/sam/Employment/JPL/usbcomm/build/CMakeFiles/usbcomm.dir/source/main.cpp.o"
-  "/Users/sam/Employment/JPL/usbcomm/source/usbdev.cpp" "/Users/sam/Employment/JPL/usbcomm/build/CMakeFiles/usbcomm.dir/source/usbdev.cpp.o"
+  "/Users/prager/JPL/usbcomm/source/main.cpp" "/Users/prager/JPL/usbcomm/build/CMakeFiles/usbcomm.dir/source/main.cpp.o"
+  "/Users/prager/JPL/usbcomm/source/usbdev.cpp" "/Users/prager/JPL/usbcomm/build/CMakeFiles/usbcomm.dir/source/usbdev.cpp.o"
   )
 set(CMAKE_CXX_COMPILER_ID "Clang")
 
