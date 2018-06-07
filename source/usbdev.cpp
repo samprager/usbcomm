@@ -213,6 +213,8 @@ int usbdev::read(std::string &msg, uint32_t nbytes, uint32_t max_checks){
     std::cout<<"\ndev read: "<<readstr<<std::endl;
     dumpBuffer(readBuffer, bytesReceived);
 
+    msg = readstr;
+
      // Check that queue hasn't gathered any additional unexpected bytes
      bytesReceived = 4242; // deliberately junk
      _dev_mtx.lock();
