@@ -12,7 +12,7 @@
 FT_STATUS getExtendedInfo(FT_HANDLE ftHandle);
 static void dumpBuffer(unsigned char *buffer, int elements);
 
-usbdev::usbdev(uint32_t port) : _rthread(), _lwthread(){
+usbdev::usbdev(uint32_t port) : _rthread(), _lwthread(), _rxbuf(new struct rx_buf){
     int err = init(port);
 
     if (err){
@@ -159,6 +159,7 @@ int usbdev::read(std::string &msg, uint32_t nbytes, uint32_t max_checks){
     // Keep checking queue until D2XX has received all the bytes we wrote
  //		printf("D2XX receive-queue has ");
     bytesReceived = 0;
+    uint32_t prev_brx = 0;
     for (queueChecks = 0; queueChecks < max_checks; queueChecks++)
     {
         if (queueChecks % 128 == 0)
@@ -177,6 +178,14 @@ int usbdev::read(std::string &msg, uint32_t nbytes, uint32_t max_checks){
 
         if (bytesReceived >= nbytes)
             break;
+
+        // if ((bytesReceived >= nbytes) && (nbytes>0))
+        //     break;
+        //
+        // if ((nbytes==0) && (bytesReceived>0) && (prev_brx == bytesReceived))
+        //   break;
+
+        prev_brx = bytesReceived;
     }
     printf("\nDev has %d bytes in queue\n", (int)bytesReceived);
 
@@ -256,7 +265,7 @@ int usbdev::write(const std::string &msg, bool wait_resp)
             _transaction_mtx.unlock();
             if(!tran_pending)
                 break;
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
             attempts++;
         }
         if (tran_pending){
@@ -273,12 +282,23 @@ int usbdev::write(const std::string &msg, bool wait_resp)
     if (ftStatus != FT_OK)
     {
         printf("Failure.  FT_Write returned %d\n", (int)ftStatus);
+        if (wait_resp){
+          _transaction_mtx.lock();
+          _transaction_pending = false;
+          _transaction_mtx.unlock();
+        }
         return(ftStatus);
     }
 
     if (bytesWritten != bytesToWrite)
     {
+
         printf("Failure.  FT_Write wrote %d bytes instead of %d.\n",(int)bytesWritten,(int)bytesToWrite);
+        if (wait_resp){
+          _transaction_mtx.lock();
+          _transaction_pending = false;
+          _transaction_mtx.unlock();
+        }
         return(ftStatus);
     }
 
@@ -303,7 +323,7 @@ int usbdev::write(const std::string &msg, bool wait_resp)
         _stop_listening = false;
         _listen_mtx.unlock();
 
-        listen(std::bind(&usbdev::resp_callback, this,std::placeholders::_1),_default_response.length(),1000);
+        listen(std::bind(&usbdev::resp_callback, this,std::placeholders::_1),_default_response.length(),100);
 
         // listen(resp_callback, _default_response.length(),1,1000);
         // restart listener thread if it was already running
@@ -336,6 +356,7 @@ int usbdev::listen(std::function<int(uint32_t)> callback, uint32_t nbytes, doubl
 
     double timewait = 0.0;
 
+    uint32_t prev_brx = 0;
     while(!stop_listen)
     {
         if (queueChecks % 128 == 0)
@@ -352,8 +373,13 @@ int usbdev::listen(std::function<int(uint32_t)> callback, uint32_t nbytes, doubl
             break;
         }
 
-        if (bytesReceived >= nbytes)
+        if ((bytesReceived >= nbytes) && (nbytes>0))
             break;
+
+        if ((nbytes==0) && (bytesReceived>0) && (prev_brx == bytesReceived))
+          break;
+
+        prev_brx = bytesReceived;
 
         if ((timeout >= 0.0) && (timewait>= timeout)){
             ftStatus = -1;
@@ -363,8 +389,8 @@ int usbdev::listen(std::function<int(uint32_t)> callback, uint32_t nbytes, doubl
 
         queueChecks++;
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        timewait += 1.0;
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        timewait += 10.0;
 
         _listen_mtx.lock();
         stop_listen = _stop_listening;
@@ -374,16 +400,16 @@ int usbdev::listen(std::function<int(uint32_t)> callback, uint32_t nbytes, doubl
     _listening = false;
     _listen_mtx.unlock();
 
-    if (ftStatus == FT_OK){
+    if ((ftStatus == FT_OK)&&(!stop_listen)){
         printf("\nDev has %d bytes in queue\n", (int)bytesReceived);
-        if(bytesReceived>=nbytes)
+        if(bytesReceived>=nbytes){
             ftStatus = callback(bytesReceived);
+            return ftStatus;
+          }
     }
-    else{
-        _transaction_mtx.lock();
-        _transaction_pending = false;
-        _transaction_mtx.unlock();
-    }
+    _transaction_mtx.lock();
+    _transaction_pending = false;
+    _transaction_mtx.unlock();
 
     return(ftStatus);
 }
@@ -457,7 +483,7 @@ void usbdev::start_listening_thread(){
             _rthread->join();
         }
     }
-    _rthread.reset(new std::thread(&usbdev::listen, this, std::bind(&usbdev::listener_callback,this,std::placeholders::_1), 1,-1.0));
+    _rthread.reset(new std::thread(&usbdev::listen, this, std::bind(&usbdev::listener_callback,this,std::placeholders::_1), 0,-1.0));
     std::cout<<"[start_listening_thread] Adding listener thread"<<std::endl;
     // _rthread->detach();
 }
@@ -476,7 +502,7 @@ int usbdev::listener_callback(uint32_t bytesReceived){
         _transaction_mtx.unlock();
         if(!tran_pending)
             break;
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
         attempts++;
     }
     if (tran_pending){
@@ -490,7 +516,12 @@ int usbdev::listener_callback(uint32_t bytesReceived){
     std::string msg;
     ftStatus= read(msg,bytesReceived);
 
-    std::cout<<"Read: " <<msg<<std::endl;
+    _rxbuf->mtx.lock();
+    _rxbuf->data.push(msg);
+    _rxbuf->mtx.unlock();
+
+    std::cout<<"Read: " <<msg<<"("<<_rxbuf->data.front()<<")"<<std::endl;
+    _rxbuf->data.pop();
 
     std::string resp = _default_response;
 
@@ -517,6 +548,7 @@ int usbdev::resp_callback(uint32_t bytesReceived){
     std::cout<<"Response Callback Called: "<<bytesReceived<<" in read queue"<<std::endl;
 
     std::string resp;
+
     ftStatus= read(resp,bytesReceived);
 
     if(ftStatus == FT_OK)

@@ -30,7 +30,7 @@ message("Include list:" ${INC_LIST})
 message("Src list:" ${SRC_LIST})
 SET(CMAKE_BUILD_TYPE "Release")
 
-target_link_libraries(${PROJECT_NAME} ftd2xx)
+target_link_libraries(${PROJECT_NAME} pthread ftd2xx)
 
 
 ### Once it's built... ########################################################
