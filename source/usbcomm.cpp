@@ -182,23 +182,30 @@ int usbcomm::receive(std::string &msg,std::string &status, uint32_t nbytes, doub
     _transaction_mtx.unlock();
 
     uint16_t rx_id;
+    uint16_t temp_id;
 
     double timespent = 0.0;
     bool read_success = false;
 
     auto begin = std::chrono::high_resolution_clock::now();
-
     while(!read_success){
         std::string readmsg = "";
         ftStatus = read(readmsg,readstatus,nbytes,timeout);
         msg = msg+readmsg;
+        std::string tempmsg = msg;
+        std::string tempresp = msg;
         if (readstatus=="timeout"){
             goto exit;
         }
-        if (messagevalid(msg,rx_id)){
+        if (messagevalid(tempmsg,rx_id)){
             resp = makeresponse("okay",rx_id);
             read_success = true;
+            msg = tempmsg;
             break;
+        }
+        else if (response_valid(tempresp,temp_id)){
+           // clear out previous response
+            msg = "";
         }
         else{
             resp = makeresponse("badmessage",rx_id);
