@@ -203,7 +203,7 @@ int usbcomm::receive(std::string &msg,std::string &status, uint32_t nbytes, doub
             msg = tempmsg;
             break;
         }
-        else if (response_valid(tempresp,temp_id)){
+        else if (responsevalid(tempresp,temp_id)){
            // clear out previous response
             msg = "";
         }
