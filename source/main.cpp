@@ -2,32 +2,21 @@
 //  main.cpp
 //
 //
-//  Created by Sam Prager on 2/9/15.
+//  Created by Sam Prager on 6/5/19.
 //
 //
 
 /*
- * Writes a known sequence of bytes then expects to read them back.
- * Run this with a loopback device fitted to one of FTDI's USB-RS232
- * converter cables.
- * A loopback device has:
- *   1.  Receive Data    connected to    Transmit Data
- *   2.  Data Set Ready  connected to    Data Terminal Ready
- *   3.  Ready To Send   connected to    Clear To Send
- *
- * Build with:
- *     gcc main.c -o loopback -Wall -Wextra -lftd2xx -Wl,-rpath /usr/local/lib
- *
- * Run with:
- *     sudo ./loopback
+ * Example program instantiating usbdev class. This class encapulates 2 way host-to-host USB communication using the D2XX FTDI driver to USB to TTL cables.
  */
+
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <string>
 #include <iostream>
 #include <vector>
-#include "usbdev.hpp"
+#include "usbcomm.hpp"
 
 int main(int argc, char *argv[]){
     uint32_t port = 0;
@@ -43,31 +32,67 @@ int main(int argc, char *argv[]){
         listener = atoi(argv[3]);
     }
 
-    usbdev *usbd = new usbdev(port);
+    usbcomm *usbd = new usbcomm(port);
     while (!usbd->ready()){
         usbd->reset(port);
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
     if (listener!=0){
-        usbd->start_listening();
-    }
-    if(listener!=1){
-    int ind = 0;
-    while(1){
+        // Receive First
+        std::cout<<"Runing as Listener"<<std::endl;
+        int ind = 0;
+        while (1){
+            std::string rxmsg;
+            std::string rxstatus;
+            int err = usbd->receive(rxmsg,rxstatus,0,20000);
+            if (err) std::cout<<"[main] Error. receive returned: "<<err<<std::endl;
+
+            std::cout<<"[main] Received: " <<rxmsg <<". Status: "<<rxstatus<<std::endl<<std::endl;
+            std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+
             std::stringstream ss;
             ss << "id"<<idnum<<"says hello" << ind;
             std::string msg = ss.str();
-            int err = usbd->write(msg);
-            if (err){
-                std::cout<<"Error. write returned error code: "<<err<<std::endl;
-            }
-        ind++;
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-    }
+            std::string resp;
+
+            err = usbd->send(msg,resp,100);
+            if (err) std::cout<<"[main] Error. send returned: "<<err<<std::endl;
+
+            std::cout<<"[main] Sent: " <<msg <<". Response: "<<resp<<std::endl;
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+            ind++;
+        }
     }
     else{
+        std::cout<<"Runing as Commander"<<std::endl;
+        // Send First
+        int ind = 0;
         while(1){
+            std::stringstream ss;
+            ss << "id"<<idnum<<"says hello" << ind;
+            std::string msg = ss.str();
+            std::string resp;
+            int err = usbd->send(msg,resp,100);
 
+            if (err) std::cout<<"[main] Error. send returned : "<<err<<std::endl;
+
+            std::cout<<"[main] Sent: " <<msg <<". Response: "<<resp<<std::endl;
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+            std::string rxmsg;
+            std::string rxstatus;
+            err = usbd->receive(rxmsg,rxstatus,0,20000);
+
+            if (err) std::cout<<"[main] Error. receive returned: "<<err<<std::endl;
+
+            std::cout<<"[main] Received: " <<rxmsg <<". Status: "<<rxstatus<<std::endl;
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+
+            ind++;
         }
     }
     return 0;
