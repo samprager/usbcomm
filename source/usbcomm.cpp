@@ -135,6 +135,12 @@ int usbcomm::init(uint32_t port){
 
     setbaud(_baudrate);
 
+    _transaction_mtx.lock();
+    _transaction_pending=false;
+    _transaction_id = 0;
+    _transaction_mtx.unlock();
+
+
 exit:
     if (_ftHandle != NULL)
         if (ftStatus != FT_OK) {
@@ -168,20 +174,52 @@ int usbcomm::receive(std::string &msg,std::string &status, uint32_t nbytes, doub
             // std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
     }
+    uint16_t trans_id;
     _transaction_mtx.lock();
     _transaction_pending = true;
+    // _transaction_id++;
+    trans_id = _transaction_id;
     _transaction_mtx.unlock();
 
-    ftStatus = read(msg,readstatus,nbytes,timeout);
-    if (readstatus=="timeout"){
-        goto exit;
+    uint16_t rx_id;
+
+    double timespent = 0.0;
+    bool read_success = false;
+
+    auto begin = std::chrono::high_resolution_clock::now();
+
+    while(!read_success){
+        std::string readmsg = "";
+        ftStatus = read(readmsg,readstatus,nbytes,timeout);
+        msg = msg+readmsg;
+        if (readstatus=="timeout"){
+            goto exit;
+        }
+        if (messagevalid(msg,rx_id)){
+            resp = makeresponse("okay",rx_id);
+            read_success = true;
+            break;
+        }
+        else{
+            resp = makeresponse("badmessage",rx_id);
+        }
+        if(timespent>timeout){
+            readstatus="timeout-badmessage";
+            ftStatus = -1;
+            break;
+        }
+
+        // wait before sending the response
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+        auto end = std::chrono::high_resolution_clock::now();
+        auto dur = end - begin;
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(dur).count();
+
+        // timespent += 10.0;
+        timespent = (double)ms;
     }
-    if (messagevalid(msg)){
-        resp = makeresponse("okay");
-    }
-    else{
-        resp = makeresponse("badmessage");
-    }
+
     ftStatus = write(resp,writestatus);
 
 
@@ -214,6 +252,7 @@ exit:
     _transaction_pending = false;
     _transaction_mtx.unlock();
 
+    std::cout<<"[receive] transaction id: "<<trans_id<<". response id: "<<rx_id<<std::endl;
     std::cout<<"[receive] readstatus: "<<readstatus<<std::endl;
     std::cout<<"[receive] writestatus: "<<writestatus<<std::endl;
 
@@ -244,23 +283,63 @@ int usbcomm::send(const std::string &msg,std::string &resp, double timeout){
             // std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
     }
+    uint16_t trans_id;
     _transaction_mtx.lock();
     _transaction_pending = true;
+    _transaction_id++;
+    trans_id = _transaction_id;
     _transaction_mtx.unlock();
 
-    std::string wmsg = makemessage(msg);
-    ftStatus = write(wmsg,writestatus);
-    ftStatus = read(resp,readstatus,0,timeout);
-    if (readstatus == "timeout")
-        resp = readstatus;
-    else{
-        if(!responsevalid(resp)){
-            std::cout<<"[send] invalid response: "<<resp<<std::endl;
+    std::string wmsg = makemessage(msg,trans_id);
+
+    bool send_success = false;
+    uint16_t resp_id;
+    double timespent = 0.0;
+    std::string flushstat;
+
+    auto begin = std::chrono::high_resolution_clock::now();
+
+    while(!send_success){
+        ftStatus = flush(flushstat);
+        if(ftStatus != FT_OK){
+            std::cout<<"Error [send]: Flush failed with status: " << flushstat<<std::endl;
         }
+        ftStatus = write(wmsg,writestatus);
+        ftStatus = read(resp,readstatus,0,timeout);
+        if (readstatus == "timeout"){
+            resp = readstatus;
+            break;
+        }
+        else{
+            if(!responsevalid(resp,resp_id)){
+                std::cout<<"[send] invalid response: "<<resp<<std::endl;
+            }
+            else{
+                send_success = true;
+                break;
+            }
+        }
+
+        if(timespent>timeout){
+            readstatus="timeout-badmessage";
+            ftStatus = -1;
+            break;
+        }
+
+        // wait before sending the response
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+        auto end = std::chrono::high_resolution_clock::now();
+        auto dur = end - begin;
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(dur).count();
+
+        // timespent += 10.0;
+        timespent = (double)ms;
     }
+    std::cout<<"[send] transaction id: "<<trans_id<<". response id: "<<resp_id<<std::endl;
     std::cout<<"[send] writestatus: "<<writestatus<<std::endl;
     std::cout<<"[send] readstatus: "<<readstatus<<std::endl;
-
+    std::cout<<"[send] send_success: "<<send_success<<std::endl;
     // while(resp != "okay"){
     //     ftStatus = write(msg,writestatus);
     //     if (ftStatus!=FT_OK){
@@ -338,10 +417,10 @@ int usbcomm::read(std::string &msg,std::string &status, uint32_t nbytes, double 
 
         prev_brx = bytesReceived;
 
-        // std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        std::this_thread::sleep_for(std::chrono::microseconds(10));
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        // std::this_thread::sleep_for(std::chrono::microseconds(10));
 
-        timewait+=.01;
+        timewait+=1.0;
     }
 
     free(readBuffer); // Free previous iteration's buffer.
@@ -433,12 +512,102 @@ int usbcomm::write(const std::string &msg, std::string &status)
     return(ftStatus);
 }
 
-bool usbcomm::responsevalid(std::string &resp){
+int usbcomm::flush(std::string &status){
+
+    FT_STATUS       ftStatus = FT_OK;
+    uint32_t           bytesReceived = 0;
+    uint32_t           bytesRead = 0;
+    unsigned char  *readBuffer = NULL;
+
+    _dev_mtx.lock();
+    ftStatus = FT_GetQueueStatus(_ftHandle, &bytesReceived);
+    _dev_mtx.unlock();
+
+    if (ftStatus != FT_OK)
+    {
+        std::stringstream ss;
+        ss << "Failure.  FT_GetQueueStatus returned "<<(int)ftStatus;
+        status = ss.str();
+        return(ftStatus);
+    }
+    if(bytesReceived==0){
+        std::stringstream ss;
+        ss << "No data in read buffer"<<(int)ftStatus;
+        status = ss.str();
+        return(ftStatus);
+    }
+
+    free(readBuffer); // Free previous iteration's buffer.
+
+    readBuffer = (unsigned char *)calloc(bytesReceived, sizeof(unsigned char));
+
+    // Then copy D2XX's buffer to ours.
+    _dev_mtx.lock();
+    ftStatus = FT_Read(_ftHandle, readBuffer, bytesReceived, &bytesRead);
+    _dev_mtx.unlock();
+    if (ftStatus != FT_OK)
+    {
+        std::stringstream ss;
+        ss << "Failure.  FT_Read returned "<<(int)ftStatus;
+        status = ss.str();
+        return(ftStatus);
+    }
+
+    const char* temprbuf = reinterpret_cast<char*>(readBuffer);
+    std::string readstr(temprbuf);
+
+    if (bytesRead != bytesReceived)
+    {
+        std::stringstream ss;
+        ss << "Failure.  FT_Read only read "<<(int)bytesRead <<" of "<<(int)bytesReceived<<" bytes";
+        status = ss.str();
+        return(ftStatus);
+    }
+
+
+     // Check that queue hasn't gathered any additional unexpected bytes
+     bytesReceived = 4242; // deliberately junk
+     _dev_mtx.lock();
+     ftStatus = FT_GetQueueStatus(_ftHandle, &bytesReceived);
+     _dev_mtx.unlock();
+     if (ftStatus != FT_OK)
+     {
+         std::stringstream ss;
+         ss << "Failure. Flushin FT_GetQueueStatus returned "<<(int)ftStatus;
+         status = ss.str();
+         return(ftStatus);
+     }
+
+     if (bytesReceived != 0)
+     {
+         std::stringstream ss;
+         ss << "Failure. "<<(int)bytesReceived <<"bytes in input queue -- expected none.";
+         status = ss.str();
+         return(ftStatus);
+     }
+     status = "okay";
+     return(ftStatus);
+
+}
+
+bool usbcomm::responsevalid(std::string &resp, uint16_t &id){
     bool valid = false;
+    id = 0;
     try{
         if(resp.compare(0,4,"RESP")==0){
             valid = true;
             resp = resp.substr(4);
+            std::istringstream iss(resp);
+            if (iss>>id){
+                // resp = iss.str();
+                resp = iss.str().substr(iss.tellg());
+            }
+        }
+        if (resp.back()!='\n'){
+            valid = false;
+        }
+        else{
+            resp.pop_back();
         }
     } catch(const std::exception& e) {
         std::cout<<e.what();
@@ -446,12 +615,27 @@ bool usbcomm::responsevalid(std::string &resp){
     }
     return(valid);
 }
-bool usbcomm::messagevalid(std::string &msg){
+
+
+
+bool usbcomm::messagevalid(std::string &msg, uint16_t &id){
     bool valid = false;
+    id = 0;
     try{
         if(msg.compare(0,4,"MESG")==0){
             valid = true;
             msg = msg.substr(4);
+            std::istringstream iss(msg);
+            if (iss>>id){
+                // msg = iss.str();
+                msg = iss.str().substr(iss.tellg());
+            }
+        }
+        if (msg.back()!='\n'){
+            valid = false;
+        }
+        else{
+            msg.pop_back();
         }
     } catch(const std::exception& e) {
         std::cout<<e.what();
@@ -459,12 +643,18 @@ bool usbcomm::messagevalid(std::string &msg){
     }
     return(valid);
 }
-std::string usbcomm::makeresponse(const std::string & msg){
-    std::string resp = "RESP" + msg;
+std::string usbcomm::makeresponse(const std::string & msg, uint16_t id){
+    std::stringstream ss;
+    ss <<"RESP"<< std::setfill('0') << std::setw(4) << id << msg <<"\n";
+    // std::string resp = "MESG" + msg;
+    std::string resp = ss.str();
     return(resp);
 }
-std::string usbcomm::makemessage(const std::string & msg){
-    std::string resp = "MESG" + msg;
+std::string usbcomm::makemessage(const std::string & msg, uint16_t id){
+    std::stringstream ss;
+    ss <<"MESG"<< std::setfill('0') << std::setw(4) << id << msg <<"\n";
+    // std::string resp = "MESG" + msg;
+    std::string resp = ss.str();
     return(resp);
 }
 

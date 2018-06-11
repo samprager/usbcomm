@@ -48,7 +48,12 @@ int main(int argc, char *argv[]){
             if (err) std::cout<<"[main] Error. receive returned: "<<err<<std::endl;
 
             std::cout<<"[main] Received: " <<rxmsg <<". Status: "<<rxstatus<<std::endl<<std::endl;
-            std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+            // make sure nothing to receive
+            std::string temprxmsg;
+            std::string temprxstatus;
+            err = usbd->receive(temprxmsg,temprxstatus,0,10);
 
             std::stringstream ss;
             ss << "id"<<idnum<<"says hello" << ind;
@@ -60,7 +65,7 @@ int main(int argc, char *argv[]){
 
             std::cout<<"[main] Sent: " <<msg <<". Response: "<<resp<<std::endl;
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
             ind++;
         }
@@ -70,17 +75,24 @@ int main(int argc, char *argv[]){
         // Send First
         int ind = 0;
         while(1){
+
+            // make sure nothing to receive
+            std::string temprxmsg;
+            std::string temprxstatus;
+            int err = usbd->receive(temprxmsg,temprxstatus,0,10);
+
+
             std::stringstream ss;
             ss << "id"<<idnum<<"says hello" << ind;
             std::string msg = ss.str();
             std::string resp;
-            int err = usbd->send(msg,resp,100);
+            err = usbd->send(msg,resp,100);
 
             if (err) std::cout<<"[main] Error. send returned : "<<err<<std::endl;
 
             std::cout<<"[main] Sent: " <<msg <<". Response: "<<resp<<std::endl;
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
             std::string rxmsg;
             std::string rxstatus;
@@ -90,7 +102,7 @@ int main(int argc, char *argv[]){
 
             std::cout<<"[main] Received: " <<rxmsg <<". Status: "<<rxstatus<<std::endl;
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
             ind++;
         }
