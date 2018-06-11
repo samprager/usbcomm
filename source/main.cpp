@@ -16,7 +16,7 @@
 #include <string>
 #include <iostream>
 #include <vector>
-#include "usbcomm.hpp"
+#include "usbdev.hpp"
 
 int main(int argc, char *argv[]){
     uint32_t port = 0;
@@ -32,67 +32,31 @@ int main(int argc, char *argv[]){
         listener = atoi(argv[3]);
     }
 
-    usbcomm *usbd = new usbcomm(port);
+    usbdev *usbd = new usbdev(port);
     while (!usbd->ready()){
         usbd->reset(port);
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
     if (listener!=0){
-        // Receive First
-        std::cout<<"Runing as Listener"<<std::endl;
-        int ind = 0;
-        while (1){
-            std::string rxmsg;
-            std::string rxstatus;
-            int err = usbd->receive(rxmsg,rxstatus,0,20000);
-            if (err) std::cout<<"[main] Error. receive returned: "<<err<<std::endl;
-
-            std::cout<<"[main] Received: " <<rxmsg <<". Status: "<<rxstatus<<std::endl<<std::endl;
-            std::this_thread::sleep_for(std::chrono::milliseconds(5000));
-
+        usbd->start_listening();
+    }
+    if(listener!=1){
+    int ind = 0;
+    while(1){
             std::stringstream ss;
             ss << "id"<<idnum<<"says hello" << ind;
             std::string msg = ss.str();
-            std::string resp;
-
-            err = usbd->send(msg,resp,100);
-            if (err) std::cout<<"[main] Error. send returned: "<<err<<std::endl;
-
-            std::cout<<"[main] Sent: " <<msg <<". Response: "<<resp<<std::endl;
-
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-
-            ind++;
-        }
+            int err = usbd->write(msg);
+            if (err){
+                std::cout<<"Error. write returned error code: "<<err<<std::endl;
+            }
+        ind++;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    }
     }
     else{
-        std::cout<<"Runing as Commander"<<std::endl;
-        // Send First
-        int ind = 0;
         while(1){
-            std::stringstream ss;
-            ss << "id"<<idnum<<"says hello" << ind;
-            std::string msg = ss.str();
-            std::string resp;
-            int err = usbd->send(msg,resp,100);
 
-            if (err) std::cout<<"[main] Error. send returned : "<<err<<std::endl;
-
-            std::cout<<"[main] Sent: " <<msg <<". Response: "<<resp<<std::endl;
-
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-
-            std::string rxmsg;
-            std::string rxstatus;
-            err = usbd->receive(rxmsg,rxstatus,0,20000);
-
-            if (err) std::cout<<"[main] Error. receive returned: "<<err<<std::endl;
-
-            std::cout<<"[main] Received: " <<rxmsg <<". Status: "<<rxstatus<<std::endl;
-
-            std::this_thread::sleep_for(std::chrono::milliseconds(5000));
-
-            ind++;
         }
     }
     return 0;
